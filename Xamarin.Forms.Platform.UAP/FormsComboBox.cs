@@ -3,6 +3,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Animation;
 using WVisualState = Windows.UI.Xaml.VisualState;
+using WDoubleAnimatin = Windows.UI.Xaml.Media.Animation.DoubleAnimation;
 
 namespace Xamarin.Forms.Platform.UWP
 {
@@ -36,7 +37,7 @@ namespace Xamarin.Forms.Platform.UWP
 				// On the phone, this is a dummy animation we've added to the closed state in the VSM
 				// Since it finishes immediately, we can use its Completed event to signal that the 
 				// closing animation has started 
-				var closedSignalAnimation = closedState?.Storyboard.Children[0] as DoubleAnimation;
+				var closedSignalAnimation = closedState?.Storyboard.Children[0] as WDoubleAnimatin;
 
 				if (closedSignalAnimation != null)
 				{
