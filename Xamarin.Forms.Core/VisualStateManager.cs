@@ -267,11 +267,13 @@ namespace Xamarin.Forms
 		public VisualStateGroup()
 		{
 			States = new WatchAddList<VisualState>(OnStatesChanged);
+			Transitions = new List<VisualTransition>();
 		}
 
 		public Type TargetType { get; set; }
 		public string Name { get; set; }
 		public IList<VisualState> States { get; }
+		public IList<VisualTransition> Transitions { get; }
 		public VisualState CurrentState { get; internal set; }
 
 		internal VisualState GetState(string name)
@@ -295,6 +297,11 @@ namespace Xamarin.Forms
 				clone.States.Add(state.Clone());
 			}
 
+			foreach(VisualTransition transition in Transitions)
+			{
+				clone.Transitions.Add(transition.Clone());
+			}
+
 			return clone;
 		}
 
@@ -311,6 +318,21 @@ namespace Xamarin.Forms
 		}
 	}
 
+	public class VisualTransition
+	{
+		public string From { get; set; }
+		public string To { get; set; }
+		public Storyboard Animation { get; set; }
+		public double Duration { get; set; }
+
+		internal VisualTransition Clone()
+		{
+			var clone = new VisualTransition { From = From, To = To, Animation = Animation, Duration = Duration };
+			return clone;
+		}
+	}
+
+	[ContentProperty(nameof(Storyboard))]
 	[RuntimeNameProperty(nameof(Name))]
 	public sealed class VisualState 
 	{
@@ -320,12 +342,13 @@ namespace Xamarin.Forms
 		}
 
 		public string Name { get; set; }
-		public IList<Setter> Setters { get;}
+		public IList<Setter> Setters { get; }
+		public Storyboard Storyboard { get; set; }
 		public Type TargetType { get; set; }
 
 		internal VisualState Clone()
 		{
-			var clone = new VisualState { Name = Name, TargetType = TargetType };
+			var clone = new VisualState { Name = Name, TargetType = TargetType, Storyboard = Storyboard };
 			foreach (var setter in Setters)
 			{
 				clone.Setters.Add(setter);

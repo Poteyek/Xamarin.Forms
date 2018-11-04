@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Xamarin.Forms.Core.UnitTests;
 
@@ -180,6 +181,31 @@ namespace Xamarin.Forms.Xaml.UnitTests
 				var button = layout.Button1;
 
 				Assert.That(button.BackgroundColor, Is.EqualTo(Color.Lime));
+			}
+
+			[TestCase(false)]
+			[TestCase(true)]
+			public void VisualElementStoryboardDidStart(bool useCompiledXaml)
+			{
+				var layout = new VisualStateManagerTests(useCompiledXaml);
+
+				var stackLayout = layout.StackLayout1;
+
+				var visualStateGroups = VisualStateManager.GetVisualStateGroups(stackLayout);
+
+				var visualStateGroup = visualStateGroups.FirstOrDefault(x => x.Name == "StoryboardStates");
+
+				Assert.NotNull(visualStateGroup);
+
+				var visualState = visualStateGroup.States.FirstOrDefault(x => x.Name == "Animate");
+
+				Assert.NotNull(visualState);
+
+				visualState.Storyboard.Begin();
+
+				Task.Delay(4000);
+
+				Assert.That(layout.Entry6.TranslationX, Is.EqualTo(100));
 			}
 		}
 	}
