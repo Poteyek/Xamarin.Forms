@@ -8,7 +8,7 @@ namespace Xamarin.Forms
 {
 	[DebuggerDisplay("R={R}, G={G}, B={B}, A={A}, Hue={Hue}, Saturation={Saturation}, Luminosity={Luminosity}")]
 	[TypeConverter(typeof(ColorTypeConverter))]
-	public struct Color
+	public struct Color : IInterpolatable<Color>
 	{
 		readonly Mode _mode;
 
@@ -163,6 +163,19 @@ namespace Xamarin.Forms
 			if (_mode == Mode.Default)
 				throw new InvalidOperationException("Invalid on Color.Default");
 			return new Color(_hue, _saturation, luminosity, _a, Mode.Hsl);
+		}
+
+		public Color InterpolateTo(Color from, Color target, double interpolation)
+		{
+			return FromRgba(from.R + interpolation * (target.R - from.R),
+					 from.G + interpolation * (target.G - from.G),
+					 from.B + interpolation * (target.B - from.B),
+					 from.A + interpolation * (target.A - from.A));
+		}
+
+		public object InterpolateTo(object from, object target, double interpolation)
+		{
+			return InterpolateTo((Color)from, (Color)target, interpolation);
 		}
 
 		static void ConvertToRgb(float hue, float saturation, float luminosity, Mode mode, out float r, out float g, out float b)

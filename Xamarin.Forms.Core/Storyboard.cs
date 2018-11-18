@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xamarin.Forms;
+using System.Linq;
+using System.Reflection;
 
 namespace Xamarin.Forms
 {
@@ -54,9 +56,106 @@ namespace Xamarin.Forms
 
 		public void Begin()
 		{
+			//TODO: Move to CreateAnimations
+			uint maximalDuration = 0;
+			if (Duration > 0)
+			{
+				maximalDuration = AutoReverse ? 2 * Duration : Duration;
+			} else
+			{
+				maximalDuration = GetMaxDurationFromChildren(Children);
+			}
+
+			var animation = CreateAnimations(Children, maximalDuration, AutoReverse, Duration);
+
+			animation.Commit(this, Name, 16, Duration, Easing, (f, v) => Completed.Invoke(this, EventArgs.Empty));
+		}
+
+		uint GetMaxDurationFromChildren(TimelineCollection timelines)
+		{
+			return timelines.ToArray().Max(x => x.AutoReverse ? 2 * (x.BeginTime + x.Duration) : x.BeginTime + x.Duration);
+		}
+
+		Animation CreateAnimations(TimelineCollection timelines, uint maximalDuration, bool autoRevers, uint storyboardDuration)
+		{
 			var storyboardAnimation = new Animation();
 
-			void UpdateProperty(WeakReference<VisualElement> weakTarget, BindableProperty targetProperty, double f)
+			foreach (var timeline in Children)
+			{
+				var target = GetTarget(timeline);
+				if (target == null)
+				{
+					continue;
+				}
+
+				var targetProperty = GetTargetProperty(timeline);
+				if (targetProperty == null)
+				{
+					continue;
+				}
+
+				var beginTime = timeline.BeginTime > 0 ? (double)timeline.BeginTime / maximalDuration : 0;
+				var duration = storyboardDuration > 0 ? storyboardDuration : (double)timeline.Duration / maximalDuration;
+
+				if (timeline is DoubleAnimation doubleAnimation)
+				{
+					if (targetProperty.ReturnType != typeof(double))
+					{
+						throw new InvalidCastException();
+					}
+
+					var animation = CreateAnimationFromDoubleAnimation(target, targetProperty, doubleAnimation.From, doubleAnimation.To, doubleAnimation.Easing, () => doubleAnimation.Completed.Invoke(target, EventArgs.Empty));
+
+					storyboardAnimation.Add(beginTime, duration, animation);
+
+					if (doubleAnimation.AutoReverse)
+					{
+						var animationReverted = CreateAnimationFromDoubleAnimation(target, targetProperty, doubleAnimation.To, doubleAnimation.From, doubleAnimation.Easing, () => doubleAnimation.Completed.Invoke(target, EventArgs.Empty));
+
+						var newBeginTime = (double)timeline.BeginTime + timeline.Duration;
+
+						storyboardAnimation.Add(newBeginTime, duration, animation);
+					}
+				}
+				else if(timeline.IsSubclassOfGenericAnimation())
+				{
+					var animationType = timeline.GetGenericTypeOfAnimation();
+
+					var interpolableObject = (IInterpolatable)Activator.CreateInstance(animationType);
+
+					if (interpolableObject == null)
+					{
+						continue;
+					}
+
+					//var animation = CreateAnimationFromGenericAnimation(target, targetProperty, )
+
+					//TODO: Implement Animation<T>
+				}
+			}
+
+			return storyboardAnimation;
+		}
+
+		Animation CreateAnimationFromGenericAnimation(VisualElement target, BindableProperty targetProperty, Easing easing, Action completed, Func<double, object> interpolateTo)
+		{
+			void UpdateProperty(WeakReference<VisualElement> weakTarget, double f, Func<double, object> interpolateToInternal)
+			{
+				if (weakTarget.TryGetTarget(out VisualElement v))
+				{
+					var objValue = interpolateToInternal(f);
+					v.SetValue(targetProperty, objValue);
+				}
+			}
+
+			var wTarget = new WeakReference<VisualElement>(target);
+
+			return new Animation(x => UpdateProperty(wTarget, x, interpolateTo), easing: easing, finished: completed);
+		}
+
+		Animation CreateAnimationFromDoubleAnimation(VisualElement target, BindableProperty targetProperty, double from, double to, Easing easing, Action completed)
+		{
+			void UpdateProperty(WeakReference<VisualElement> weakTarget, double f)
 			{
 				if (weakTarget.TryGetTarget(out VisualElement v))
 				{
@@ -64,34 +163,14 @@ namespace Xamarin.Forms
 				}
 			}
 
-			foreach (var timeline in Children)
-			{
-				var target = GetTarget(timeline) ?? timeline;
-				var weakTarget = new WeakReference<VisualElement>(target);
+			var wTarget = new WeakReference<VisualElement>(target);
 
-				if (!weakTarget.TryGetTarget(out var targetView))
-				{
-					continue;
-				}
-				var targetProperty = GetTargetProperty(targetView);
-
-				if (targetProperty == null)
-				{
-					continue;
-				}
-
-
-				var timelineAnimation = new Animation(v => UpdateProperty(weakTarget, targetProperty, v), easing: timeline.Easing, finished: () => timeline.Completed.Invoke(timeline, EventArgs.Empty));
-				storyboardAnimation.Add(timeline.BeginTime, timeline.BeginTime + timeline.Duration, timelineAnimation);
-			}
-
-			storyboardAnimation.Commit(this, Name, 16, Duration, Easing, (f, v) => Completed.Invoke(this, EventArgs.Empty), () => AutoReverse);
+			return new Animation(x => UpdateProperty(wTarget, x), from, to, easing, completed);
 		}
 
 		public void End()
 		{
-			//TODO: Implement
-			throw new NotImplementedException();
+			this.AbortAnimation(Name);
 		}
 
 		public void Pause()
@@ -102,6 +181,7 @@ namespace Xamarin.Forms
 
 		public void Resume()
 		{
+			//TODO: Extend Animation API (There is no Resume)
 			//TODO: Implement
 			throw new NotImplementedException();
 		}
@@ -115,6 +195,51 @@ namespace Xamarin.Forms
 
 	public static class StoryboardExtensions
 	{
+		public static bool IsSubclassOfGenericAnimation(this Timeline timeline)
+		{
+#if NETSTANDARD1_0
+			
+			var toCheck = timeline.GetType();
+			while (toCheck != null && toCheck != typeof(object))
+			{
+				var typeInfo = toCheck.GetTypeInfo(); 
+				var cur = typeInfo.IsGenericType ? toCheck.GetGenericTypeDefinition() : toCheck;
+				if (typeof(Animation<>) == cur)
+				{
+					return true;
+				}
+				toCheck = typeInfo.BaseType;
+			}
+			return false;
+#else
+			var toCheck = timeline.GetType();
+			while (toCheck != null && toCheck != typeof(object))
+			{
+				var cur = toCheck.IsGenericType ? toCheck.GetGenericTypeDefinition() : toCheck;
+				if (typeof(Animation<>) == cur)
+				{
+					return true;
+				}
+				toCheck = toCheck.BaseType;
+			}
+			return false;
+#endif
+		}
+
+		public static Type GetGenericTypeOfAnimation(this Timeline timeline)
+		{
+#if NETSTANDARD1_0
+			var typeInfo = timeline.GetType().GetTypeInfo();
+			var args = typeInfo.IsGenericTypeDefinition 
+						? typeInfo.GenericTypeParameters 
+						: typeInfo.GenericTypeArguments;
+			return args.FirstOrDefault();
+#else
+			var args = timeline.GetType().GetGenericArguments();
+			return args.FirstOrDefault();
+#endif
+		}
+
 		static Task<bool> AnimateTo(this VisualElement view, double start, double end, string name,
 			Action<VisualElement, double> updateAction, uint length = 250, Easing easing = null)
 		{
@@ -173,5 +298,9 @@ namespace Xamarin.Forms
 	{
 		public double From { get; set; }
 		public double To { get; set; }
+	}
+
+	public class ColorAnimation : Animation<Color>
+	{		
 	}
 }
