@@ -288,7 +288,7 @@ namespace Xamarin.Forms
 	{
 	}
 
-	public class Animation<T> : Timeline where T : IInterpolatable<T>
+	public abstract class Animation<T> : Timeline where T : IInterpolatable<T>
 	{
 		public T From { get; set; }
 		public T To { get; set; }
