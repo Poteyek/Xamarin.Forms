@@ -89,7 +89,6 @@ namespace Xamarin.Forms
 				}
 
 				var targetProperty = GetTargetProperty(timeline);
-
 				if (targetProperty == null)
 				{
 					continue;
@@ -239,7 +238,6 @@ namespace Xamarin.Forms
 			return args.FirstOrDefault();
 #endif
 		}
-
 
 		static Task<bool> AnimateTo(this VisualElement view, double start, double end, string name,
 			Action<VisualElement, double> updateAction, uint length = 250, Easing easing = null)
